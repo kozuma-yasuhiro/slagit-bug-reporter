@@ -1,10 +1,4 @@
----
-
-承知いたしました！AWS Secrets Manager を利用する方式を、先ほどのCursor向けプロンプトに反映させます。特に、シークレットの取得方法、IAMロールの権限、および関連する環境変数の指示を更新しました。
-
----
-
-## Cursor向けプロンプト：Slackバグ報告 → GitHub Issue 自動作成システム (`slagit-bug-reporter`) - Secrets Manager対応版
+# Slackバグ報告 → GitHub Issue 自動作成システム (`slagit-bug-reporter`) - Secrets Manager対応版
 
 ---
 
