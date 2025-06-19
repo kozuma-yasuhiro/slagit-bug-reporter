@@ -12,9 +12,18 @@ g = Github(GITHUB_TOKEN)
 repo = g.get_repo(REPO_NAME)
 issue = repo.get_issue(number=ISSUE_NUMBER)
 
-# リポジトリのファイル一覧を取得（例としてルートディレクトリのみ。必要に応じて拡張可）
-files = [f.path for f in repo.get_contents("") if f.type == "file"]
+# リポジトリのファイル一覧を取得（再帰的に全てのファイルを取得）
+def fetch_all_files(repo, directory=""):
+    contents = repo.get_contents(directory)
+    all_files = []
+    for item in contents:
+        if item.type == "file":
+            all_files.append(item.path)
+        elif item.type == "dir":
+            all_files.extend(fetch_all_files(repo, item.path))
+    return all_files
 
+files = fetch_all_files(repo)
 # AIへのプロンプト生成
 prompt = f"""
 あなたはGitHubリポジトリのAIコントリビューターです。
