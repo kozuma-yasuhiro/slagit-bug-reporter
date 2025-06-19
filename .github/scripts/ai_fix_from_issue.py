@@ -39,9 +39,15 @@ response = openai.ChatCompletion.create(
 )
 result = response.choices[0].message['content']
 
-# AIの返答をパースして各ファイルを書き換える
+# AIの返答を検証
 import re
 
+if not re.search(r"# file: .+?\n.*?# endfile", result, re.DOTALL):
+    print("Error: AI response is not in the expected format.")
+    print("Response received:", result)
+    exit(1)
+
+# AIの返答をパースして各ファイルを書き換える
 for match in re.finditer(r"# file: (.+?)\n(.*?)# endfile", result, re.DOTALL):
     fname, content = match.groups()
     with open(fname, "w") as f:
