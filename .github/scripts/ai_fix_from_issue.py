@@ -50,7 +50,11 @@ if not re.search(r"# file: .+?\n.*?# endfile", result, re.DOTALL):
 # AIの返答をパースして各ファイルを書き換える
 for match in re.finditer(r"# file: (.+?)\n(.*?)# endfile", result, re.DOTALL):
     fname, content = match.groups()
-    with open(fname, "w") as f:
-        f.write(content.strip())
+    sanitized_fname = os.path.basename(fname)  # Extract base filename
+    if sanitized_fname in [os.path.basename(f) for f in files]:  # Validate against whitelist
+        with open(sanitized_fname, "w") as f:
+            f.write(content.strip())
+    else:
+        print(f"Warning: Invalid filename '{fname}' detected. Skipping file write.")
 
 print("AIによるファイル修正完了")
