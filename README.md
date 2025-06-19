@@ -107,3 +107,62 @@ GitHub Issueを作成するために、`repo` スコープを持つ**パーソ�
 ```
 
 **ヒント**: Slackでのバグ報告時に、上記のような構成で情報を記述するようチーム内でガイドラインを設けると、より質の高いIssueが生成されます。
+
+
+## ディレクトリ構成
+```
+.
+├── .github/
+│   └── pull_request_template.md  # GitHubのPRテンプレート
+├── docs/
+│   ├── arch/                   # システムアーキテクチャ図などの資料
+│   │   └── system_architecture.mermaid
+│   └── wiki/                   # Wikiコンテンツ
+│       └── home.md
+├── src/                        # コード本体
+│   ├── lambda_function/        # Lambda関数（主要なプロセス）
+│   │   ├── __init__.py
+│   │   ├── handler.py          # Lambdaのメインハンドラー
+│   │   └── utils/              # 共通ユーティリティ（例: github_api.py, slack_parser.py）
+│   │       ├── __init__.py
+│   │       ├── github_api.py
+│   │       └── slack_parser.py
+│   └── common/                 # 複数のプロセスで共有されるコードなど（もしあれば）
+│       └── ...
+├── prompts/                    # AIプロンプト（仕様書）
+│   └── cursor_spec_prompt.md   # Cursor向け仕様書プロンプト
+├── scripts/                    # デプロイやビルドなどのスクリプト
+│   ├── deploy.sh               # デプロイスクリプト (例: SAM/Serverless Framework コマンド)
+│   └── build.sh                # ビルドスクリプト (もし必要なら)
+├── .gitignore
+├── README.md                   # リポジトリの概要と使い方
+├── pyproject.toml              # Python依存関係管理 (Poetry/PDM/Pipenvなど)
+├── requirements.txt            # Python依存関係 (pip用)
+└── serverless.yml              # Serverless Framework設定ファイル (もし利用するなら)
+```
+
+### 各ディレクトリの説明
+* .github/:
+    * pull_request_template.md: GitHubのプルリクエストテンプレートを格納します。レビュアーがPRの内容を効率的に把握できるようになります。
+* docs/:
+    * システムに関するドキュメント全般を格納します。
+    * arch/: システムアーキテクチャ図など、設計に関する図や詳細な技術ドキュメントを置きます。
+    * wiki/: GitHub Wikiに載せるような、より広範な情報（利用ガイド、FAQ、ユースケースなど）をMarkdownファイルで格納します。GitHubのWiki機能と連携させやすいです。
+* src/:
+    * コード本体を格納するルートディレクトリです。
+    * lambda_function/: 今回のシステムの主要なLambda関数（または他のサーバーレスプロセス）のコードを格納します。プロセス単位でディレクトリを分けることで、将来的に機能が拡張され、別のLambda関数が必要になった場合でも整理しやすくなります。
+        * handler.py: Lambdaのイベントを受け取り、主要な処理を呼び出すエントリーポイントです。
+        * utils/: github_api.py (GitHub API操作用) や slack_parser.py (Slackメッセージ解析用) のように、特定の機能に特化したユーティリティモジュールを格納します。
+    * common/: 複数のLambda関数やスクリプト間で共通して利用されるコード（例: 共通の例外クラス、認証ヘルパーなど）があればここに置きます。
+* prompts/:
+    * AI（Cursorなど）にコード生成を依頼する際に使用した**プロンプト（仕様書）**を格納します。これにより、どのような指示でコードが生成されたかを追跡できます。
+    * cursor_spec_prompt.md: 今回作成したCursor向けのプロンプトをMarkdown形式で保存します。
+* scripts/:
+    * デプロイ、ビルド、テスト実行など、開発・運用に必要なスクリプトを格納します。
+    * deploy.sh: AWS Lambdaへのデプロイコマンドなどを記述します。Serverless FrameworkやAWS SAM CLIを使用する場合のコマンドなどが考えられます。
+* README.md:
+    * リポジトリの顔となるファイルです。システムの概要、セットアップ方法、使い方などを記述します。
+* pyproject.toml / requirements.txt:
+    * Pythonプロジェクトの依存関係を管理するファイルです。どちらか、または両方をプロジェクトの管理方法に応じて使用します。
+* serverless.yml:
+    * もしServerless Frameworkを使用してデプロイを行う場合、その設定ファイルをここに置きます。AWS SAMやTerraformなどを使用する場合は、それに準じた設定ファイルを置きます。
