@@ -32,7 +32,7 @@ Issue本文: {issue.body}
 
 openai.api_key = OPENAI_API_KEY
 response = openai.ChatCompletion.create(
-    model="gpt-4o",
+    model=os.environ["OPENAI_MODEL"],
     messages=[{"role": "user", "content": prompt}],
     temperature=0.2,
     max_tokens=4096,
