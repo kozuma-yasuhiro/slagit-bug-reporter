@@ -1,0 +1,46 @@
+name: AI Issue Fix PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: '修正対象のIssue番号'
+        required: true
+        type: number
+  issues:
+    types: [opened]
+
+jobs:
+  ai-fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install openai PyGithub
+
+      - name: Run AI Code Fix from Issue
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 手動実行時: inputs.issue_number、イベント時: github.event.issue.number
+          ISSUE_NUMBER: ${{ github.event.inputs.issue_number || github.event.issue.number }}
+          REPO_NAME: ${{ github.repository }}
+        run: |
+          python .github/scripts/ai_fix_from_issue.py
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "AIによるIssue #${{ env.ISSUE_NUMBER }} の自動修正"
+          branch: ai-issue-fix/${{ github.run_id }}
+          title: "AIによるIssue #${{ env.ISSUE_NUMBER }} の自動修正"
+          body: |
+            このPRはIssue #${{ env.ISSUE_NUMBER }} の内容をもとにAI（OpenAI API）で自動生成されました。
