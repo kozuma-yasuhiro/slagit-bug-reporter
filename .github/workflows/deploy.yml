@@ -1,0 +1,75 @@
+name: Deploy Lambda Function
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+        
+    - name: Create Lambda deployment package
+      run: |
+        python scripts/deploy_lambda.py \
+          --source src \
+          --requirements src/requirements.txt \
+          --output artifact/lambda_package.zip
+          
+    - name: Upload package to S3
+      run: |
+        aws s3 cp artifact/lambda_package.zip \
+          s3://${{ secrets.S3_BUCKET_FOR_DEPLOYMENT }}/lambda_package.zip
+          
+    - name: Deploy to Lambda
+      run: |
+        # 関数が存在するかチェック
+        if aws lambda get-function --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} 2>/dev/null; then
+          echo "Updating existing Lambda function..."
+          aws lambda update-function-code \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --s3-bucket ${{ secrets.S3_BUCKET_FOR_DEPLOYMENT }} \
+            --s3-key lambda_package.zip
+        else
+          echo "Creating new Lambda function..."
+          aws lambda create-function \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --runtime ${{ secrets.LAMBDA_RUNTIME }} \
+            --role ${{ secrets.LAMBDA_ROLE_ARN }} \
+            --handler ${{ secrets.LAMBDA_HANDLER }} \
+            --s3-bucket ${{ secrets.S3_BUCKET_FOR_DEPLOYMENT }} \
+            --s3-key lambda_package.zip \
+            --timeout 30 \
+            --memory-size 128
+        fi
+        
+    - name: Update Lambda configuration
+      run: |
+        aws lambda update-function-configuration \
+          --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+          --environment Variables='{
+            "GITHUB_PAT_SECRET_NAME": "${{ secrets.GITHUB_PAT_SECRET_NAME }}",
+            "GITHUB_REPO_OWNER": "${{ secrets.GITHUB_REPO_OWNER }}",
+            "GITHUB_REPO_NAME": "${{ secrets.GITHUB_REPO_NAME }}",
+            "SLACK_WEBHOOK_URL": "${{ secrets.SLACK_WEBHOOK_URL }}",
+            "AWS_REGION": "${{ secrets.AWS_REGION }}"
+          }'
+          
+    - name: Clean up S3 artifact
+      run: |
+        aws s3 rm s3://${{ secrets.S3_BUCKET_FOR_DEPLOYMENT }}/lambda_package.zip 
