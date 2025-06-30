@@ -39,8 +39,6 @@ graph TD
 
 ## ⚙️ セットアップ手順
 
-詳細なセットアップ手順は、各クラウドプロバイダー（AWS, GCP, Azure）ごとのドキュメントまたは以下のセクションを参照してください。
-
 ### 1. GitHub パーソナルアクセストークン (PAT) の取得
 
 GitHub Issueを作成するために、`repo` スコープを持つ**パーソナルアクセストークン**を生成してください。
@@ -54,14 +52,72 @@ GitHub Issueを作成するために、`repo` スコープを持つ**パーソ�
 3.  **Features > OAuth & Permissions** にて、`channels:read`, `chat:write` などの適切なスコープを付与します。
 4.  Appをワークスペースにインストールし、必要なチャンネルに追加します。
 
-### 3. Serverless Function のデプロイ
+### 3. AWS リソースの準備
 
-選択したクラウドプロバイダー（AWS Lambda）に、本リポジトリのコードをデプロイします。
+#### 3.1 AWS Secrets Manager の設定
 
-* **環境変数**: 取得したGitHub PATをセキュアな方法（例: AWS Secrets Manager）で設定し、Function内で利用できるようにします。
-* **コードのデプロイ**: 本リポジトリのFunctionコードをデプロイします。コードはSlackからのWebhookペイロードを解析し、GitHub APIを呼び出すロジックを含みます。
+GitHub PATを安全に保存するためのシークレットを作成します：
 
-### 4. テスト
+```bash
+# JSON形式で保存する場合
+aws secretsmanager create-secret \
+  --name "slagit-bug-reporter/github_pat" \
+  --description "GitHub Personal Access Token for slagit-bug-reporter" \
+  --secret-string '{"github_pat":"your-github-pat-here"}'
+
+# プレーンテキストで保存する場合
+aws secretsmanager create-secret \
+  --name "slagit-bug-reporter/github_pat" \
+  --description "GitHub Personal Access Token for slagit-bug-reporter" \
+  --secret-string "your-github-pat-here"
+```
+
+#### 3.2 S3バケットの作成
+
+デプロイパッケージ用のS3バケットを作成します：
+
+```bash
+aws s3 mb s3://your-deployment-bucket-name
+```
+
+#### 3.3 IAMロールの作成
+
+Lambda関数用のIAMロールを作成し、以下の権限を付与します：
+
+- `secretsmanager:GetSecretValue` (特定のシークレットのみ)
+- `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents`
+
+### 4. GitHub Actions の設定
+
+#### 4.1 GitHub Secrets の設定
+
+リポジトリの Settings > Secrets and variables > Actions で以下のシークレットを設定してください：
+
+**AWS認証情報:**
+- `AWS_ACCESS_KEY_ID`: AWSアクセスキーID
+- `AWS_SECRET_ACCESS_KEY`: AWSシークレットアクセスキー
+- `AWS_REGION`: AWSリージョン（例: us-east-1）
+
+**Lambda設定:**
+- `LAMBDA_FUNCTION_NAME`: Lambda関数名（例: slagit-bug-reporter-function）
+- `LAMBDA_HANDLER`: ハンドラーパス（例: lambda_function.lambda_handler）
+- `LAMBDA_RUNTIME`: ランタイム（例: python3.9）
+- `LAMBDA_ROLE_ARN`: IAMロールのARN
+
+**デプロイ設定:**
+- `S3_BUCKET_FOR_DEPLOYMENT`: デプロイパッケージ用S3バケット名
+
+**アプリケーション設定:**
+- `GITHUB_PAT_SECRET_NAME`: Secrets Managerのシークレット名（例: slagit-bug-reporter/github_pat）
+- `GITHUB_REPO_OWNER`: GitHubリポジトリのオーナー名
+- `GITHUB_REPO_NAME`: GitHubリポジトリ名
+- `SLACK_WEBHOOK_URL`: Slack通知用Webhook URL（任意）
+
+#### 4.2 デプロイの実行
+
+`main` ブランチにプッシュすると、自動的にGitHub Actionsが実行され、Lambda関数がデプロイされます。
+
+### 5. テスト
 
 設定完了後、Slackの対象チャンネルでバグ報告メッセージを投稿し、GitHubにIssueが自動作成されることを確認してください。
 
@@ -108,61 +164,44 @@ GitHub Issueを作成するために、`repo` スコープを持つ**パーソ�
 
 **ヒント**: Slackでのバグ報告時に、上記のような構成で情報を記述するようチーム内でガイドラインを設けると、より質の高いIssueが生成されます。
 
+## 🔧 ローカル開発
 
-## ディレクトリ構成
+### 依存関係のインストール
+
+```bash
+pip install -r src/requirements.txt
+```
+
+### デプロイパッケージの作成
+
+```bash
+python scripts/deploy_lambda.py \
+  --source src \
+  --requirements src/requirements.txt \
+  --output artifact/lambda_package.zip
+```
+
+## 📁 ディレクトリ構成
+
 ```
 .
 ├── .github/
-│   └── pull_request_template.md  # GitHubのPRテンプレート
-├── docs/
-│   ├── arch/                   # システムアーキテクチャ図などの資料
-│   │   └── system_architecture.mermaid
-│   └── wiki/                   # Wikiコンテンツ
-│       └── home.md
-├── src/                        # コード本体
-│   ├── lambda_function/        # Lambda関数（主要なプロセス）
-│   │   ├── __init__.py
-│   │   ├── handler.py          # Lambdaのメインハンドラー
-│   │   └── utils/              # 共通ユーティリティ（例: github_api.py, slack_parser.py）
-│   │       ├── __init__.py
-│   │       ├── github_api.py
-│   │       └── slack_parser.py
-│   └── common/                 # 複数のプロセスで共有されるコードなど（もしあれば）
-│       └── ...
-├── prompts/                    # AIプロンプト（仕様書）
-│   └── cursor_spec_prompt.md   # Cursor向け仕様書プロンプト
-├── scripts/                    # デプロイやビルドなどのスクリプト
-│   ├── deploy.sh               # デプロイスクリプト (例: SAM/Serverless Framework コマンド)
-│   └── build.sh                # ビルドスクリプト (もし必要なら)
-├── .gitignore
-├── README.md                   # リポジトリの概要と使い方
-├── pyproject.toml              # Python依存関係管理 (Poetry/PDM/Pipenvなど)
-├── requirements.txt            # Python依存関係 (pip用)
-└── serverless.yml              # Serverless Framework設定ファイル (もし利用するなら)
+│   └── workflows/
+│       └── deploy.yml          # GitHub Actions デプロイワークフロー
+├── src/
+│   ├── lambda_function.py      # Lambda関数本体
+│   └── requirements.txt        # Python依存関係
+├── scripts/
+│   └── deploy_lambda.py        # Lambdaデプロイパッケージ作成スクリプト
+├── prompts/
+│   └── cursor_spec_prompt.md   # 仕様書
+└── README.md                   # このファイル
 ```
 
-### 各ディレクトリの説明
-* `.github/`:
-    * `pull_request_template.md`: GitHubのプルリクエストテンプレートを格納します。レビュアーがPRの内容を効率的に把握できるようになります。
-* `docs/`:
-    * システムに関するドキュメント全般を格納します。
-    * `arch/`: システムアーキテクチャ図など、設計に関する図や詳細な技術ドキュメントを置きます。
-    * `wiki/`: GitHub Wikiに載せるような、より広範な情報（利用ガイド、FAQ、ユースケースなど）をMarkdownファイルで格納します。GitHubのWiki機能と連携させやすいです。
-* src/:
-    * コード本体を格納するルートディレクトリです。
-    * `lambda_function/`: 今回のシステムの主要なLambda関数（または他のサーバーレスプロセス）のコードを格納します。プロセス単位でディレクトリを分けることで、将来的に機能が拡張され、別のLambda関数が必要になった場合でも整理しやすくなります。
-        * `handler.py`: Lambdaのイベントを受け取り、主要な処理を呼び出すエントリーポイントです。
-        * `utils/`: `github_api.py` (GitHub API操作用) や `slack_parser.py` (Slackメッセージ解析用) のように、特定の機能に特化したユーティリティモジュールを格納します。
-    * `common/`: 複数のLambda関数やスクリプト間で共通して利用されるコード（例: 共通の例外クラス、認証ヘルパーなど）があればここに置きます。
-* `prompts/`:
-    * AI（Cursorなど）にコード生成を依頼する際に使用した**プロンプト（仕様書）**を格納します。これにより、どのような指示でコードが生成されたかを追跡できます。
-    * `cursor_spec_prompt.md`: 今回作成したCursor向けのプロンプトをMarkdown形式で保存します。
-* `scripts/`:
-    * デプロイ、ビルド、テスト実行など、開発・運用に必要なスクリプトを格納します。
-    * `deploy.sh`: AWS Lambdaへのデプロイコマンドなどを記述します。Serverless FrameworkやAWS SAM CLIを使用する場合のコマンドなどが考えられます。
-* `README.md`:
-    * リポジトリの顔となるファイルです。システムの概要、セットアップ方法、使い方などを記述します。
-* `pyproject.toml` / `requirements.txt`:
-    * Pythonプロジェクトの依存関係を管理するファイルです。どちらか、または両方をプロジェクトの管理方法に応じて使用します。
-* `serverless.yml`:
-    * もしServerless Frameworkを使用してデプロイを行う場合、その設定ファイルをここに置きます。AWS SAMやTerraformなどを使用する場合は、それに準じた設定ファイルを置きます。
+## 🤝 貢献
+
+プルリクエストやイシューの報告を歓迎します。大きな変更を行う場合は、まずイシューで議論してください。
+
+## 📄 ライセンス
+
+このプロジェクトはMITライセンスの下で公開されています。
